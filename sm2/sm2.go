@@ -26,11 +26,17 @@ import (
 	"crypto/sha512"
 	"encoding/asn1"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"math/big"
 
 	"github.com/tjfoc/gmsm/sm3"
+)
+
+var (
+	ErrInvalidMsgLen = errors.New("invalid message length, need 32 bytes")
 )
 
 var (
@@ -39,6 +45,18 @@ var (
 
 const (
 	aesIV = "IV for <SM2> CTR"
+)
+
+const (
+	pubkeyCompressed   byte = 0x2 // y_bit + x coord
+	pubkeyUncompressed byte = 0x4 // x coord + y coord
+	pubkeyHybrid       byte = 0x6 // y_bit + x coord + y coord
+)
+
+const (
+	PubKeyBytesLenCompressed   = 33
+	PubKeyBytesLenUncompressed = 65
+	PubKeyBytesLenHybrid       = 65
 )
 
 type PublicKey struct {
@@ -51,8 +69,9 @@ type PrivateKey struct {
 	D *big.Int
 }
 
-type sm2Signature struct {
+type Sm2Signature struct {
 	R, S *big.Int
+	V    int
 }
 
 // The SM2's private key contains the public key
@@ -60,12 +79,12 @@ func (priv *PrivateKey) Public() crypto.PublicKey {
 	return &priv.PublicKey
 }
 
-func SignDigitToSignData(r, s *big.Int) ([]byte, error) {
-	return asn1.Marshal(sm2Signature{r, s})
+func SignDigitToSignData(r, s *big.Int, v int) ([]byte, error) {
+	return asn1.Marshal(Sm2Signature{r, s, v})
 }
 
 func SignDataToSignDigit(sign []byte) (*big.Int, *big.Int, error) {
-	var sm2Sign sm2Signature
+	var sm2Sign Sm2Signature
 
 	_, err := asn1.Unmarshal(sign, &sm2Sign)
 	if err != nil {
@@ -77,19 +96,33 @@ func SignDataToSignDigit(sign []byte) (*big.Int, *big.Int, error) {
 // sign format = 30 + len(z) + 02 + len(r) + r + 02 + len(s) + s, z being what follows its size, ie 02+len(r)+r+02+len(s)+s
 func (priv *PrivateKey) Sign(rand io.Reader, msg []byte, opts crypto.SignerOpts) ([]byte, error) {
 	// r, s, err := Sign(priv, msg)
-	r, s, err := Sm2Sign(priv, msg, nil)
+	sig, err := Sm2Sign(priv, msg, nil)
 	if err != nil {
 		return nil, err
 	}
-	return asn1.Marshal(sm2Signature{r, s})
+	return asn1.Marshal(sig)
 }
 
 func (priv *PrivateKey) Decrypt(data []byte) ([]byte, error) {
 	return Decrypt(priv, data)
 }
 
+func (p *PublicKey) SerializeUncompressed() []byte {
+	b := make([]byte, 0, PubKeyBytesLenUncompressed)
+	b = append(b, pubkeyUncompressed)
+	b = paddedAppend(32, b, p.X.Bytes())
+	return paddedAppend(32, b, p.Y.Bytes())
+}
+
+func paddedAppend(size uint, dst, src []byte) []byte {
+	for i := 0; i < int(size)-len(src); i++ {
+		dst = append(dst, 0)
+	}
+	return append(dst, src...)
+}
+
 func (pub *PublicKey) Verify(msg []byte, sign []byte) bool {
-	var sm2Sign sm2Signature
+	var sm2Sign Sm2Signature
 
 	_, err := asn1.Unmarshal(sign, &sm2Sign)
 	if err != nil {
@@ -162,6 +195,19 @@ func GenerateKey() (*PrivateKey, error) {
 	priv.PublicKey.Curve = c
 	priv.D = k
 	priv.PublicKey.X, priv.PublicKey.Y = c.ScalarBaseMult(k.Bytes())
+	return priv, nil
+}
+
+func GenerateKeyBySeed(seed []byte, strict bool) (*PrivateKey, error) {
+	c := P256Sm2()
+	priv := new(PrivateKey)
+	//if strict && 8*len(seed) != priv.Params().BitSize {
+	//	return nil, fmt.Errorf("invalid length, need %d bits", priv.Params().BitSize)
+	//}
+	priv.D = new(big.Int).SetBytes(seed)
+
+	priv.PublicKey.Curve = c
+	priv.PublicKey.X, priv.PublicKey.Y = c.ScalarBaseMult(seed)
 	return priv, nil
 }
 
@@ -265,48 +311,66 @@ func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
 	return x.Cmp(r) == 0
 }
 
-func Sm2Sign(priv *PrivateKey, msg, uid []byte) (r, s *big.Int, err error) {
+func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
+	var sig Sm2Signature
 	za, err := ZA(&priv.PublicKey, uid)
 	if err != nil {
-		return nil, nil, err
+		return
 	}
 	e, err := msgHash(za, msg)
 	if err != nil {
-		return nil, nil, err
+		return
 	}
 	c := priv.PublicKey.Curve
 	N := c.Params().N
 	if N.Sign() == 0 {
-		return nil, nil, errZeroParam
+		return
 	}
-	var k *big.Int
+	var ry, k *big.Int
+
 	for { // 调整算法细节以实现SM2
 		for {
 			k, err = randFieldElement(c, rand.Reader)
 			if err != nil {
-				r = nil
+				sig.R = nil
 				return
 			}
-			r, _ = priv.Curve.ScalarBaseMult(k.Bytes())
-			r.Add(r, e)
-			r.Mod(r, N)
-			if r.Sign() != 0 {
-				if t := new(big.Int).Add(r, k); t.Cmp(N) != 0 {
+			sig.R, ry = priv.Curve.ScalarBaseMult(k.Bytes())
+			sig.R.Add(sig.R, e)
+			sig.R.Mod(sig.R, N)
+			if sig.R.Sign() != 0 {
+				if t := new(big.Int).Add(sig.R, k); t.Cmp(N) != 0 {
 					break
 				}
 			}
-
 		}
-		rD := new(big.Int).Mul(priv.D, r)
-		s = new(big.Int).Sub(k, rD)
+		tmp := new(big.Int).Mod(ry, new(big.Int).SetInt64(2))
+		if tmp.Cmp(new(big.Int).SetInt64(1)) == 0 {
+			sig.V = 1 //奇数
+		} else {
+			sig.V = 0 //偶数
+		}
+		rD := new(big.Int).Mul(priv.D, sig.R)
+		sig.S = new(big.Int).Sub(k, rD)
 		d1 := new(big.Int).Add(priv.D, one)
 		d1Inv := new(big.Int).ModInverse(d1, N)
-		s.Mul(s, d1Inv)
-		s.Mod(s, N)
-		if s.Sign() != 0 {
+		sig.S.Mul(sig.S, d1Inv)
+		sig.S.Mod(sig.S, N)
+		if sig.S.Sign() != 0 {
 			break
 		}
 	}
+
+	sign = make([]byte, 66)
+	copy(sign[:32], sig.R.Bytes())
+	copy(sign[32:64], sig.S.Bytes())
+	if sig.V == 0 {
+		sign[64] = 0
+	} else {
+		sign[64] = 1
+	}
+	sign[65] = 0
+
 	return
 }
 
@@ -351,30 +415,14 @@ func msgHash(za, msg []byte) (*big.Int, error) {
 }
 
 // ZA = H256(ENTLA || IDA || a || b || xG || yG || xA || yA)
+// 公式修正为如下
+// ZA = H256(a || b || xG || yG)
 func ZA(pub *PublicKey, uid []byte) ([]byte, error) {
 	za := sm3.New()
-	uidLen := len(uid)
-	if uidLen >= 8192 {
-		return []byte{}, errors.New("SM2: uid too large")
-	}
-	Entla := uint16(8 * uidLen)
-	za.Write([]byte{byte((Entla >> 8) & 0xFF)})
-	za.Write([]byte{byte(Entla & 0xFF)})
-	if uidLen > 0 {
-		za.Write(uid)
-	}
 	za.Write(sm2P256ToBig(&sm2P256.a).Bytes())
 	za.Write(sm2P256.B.Bytes())
 	za.Write(sm2P256.Gx.Bytes())
 	za.Write(sm2P256.Gy.Bytes())
-
-	xBuf := pub.X.Bytes()
-	yBuf := pub.Y.Bytes()
-	if n := len(xBuf); n < 32 {
-		xBuf = append(zeroByteSlice()[:32-n], xBuf...)
-	}
-	za.Write(xBuf)
-	za.Write(yBuf)
 	return za.Sum(nil)[:32], nil
 }
 
@@ -530,4 +578,101 @@ func Decompress(a []byte) *PublicKey {
 		X:     x,
 		Y:     y,
 	}
+}
+
+/*
+根据msg和sig计算公钥的过程如下：
+点R（X1，Y1）, X1 = r - e, e = H(ZA || M)
+R = s·G + （r+s)·P
+P = （R - s·G）/(r + s)
+s = (k-r*d)/(1+d) //k是随机数，d是私钥
+*/
+
+func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
+	if len(msg) > 32 {
+		return []byte{}, nil
+	}
+	if len(sig) != 65 {
+		return []byte{}, nil
+	}
+	za, _ := ZA(nil, nil)
+	c := P256Sm2()
+	r := new(big.Int).SetBytes(sig[:32])
+	s := new(big.Int).SetBytes(sig[32:64])
+	e, _ := msgHash(za, msg)
+	Rx := new(big.Int).Sub(r, e)
+	Ry, err := decompressPoint(c, Rx, int(sig[64]))
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	t := new(big.Int).Add(r, s)
+	invt := new(big.Int).ModInverse(t, c.Params().N)
+	//s·G
+	sGx, sGy := c.ScalarBaseMult(s.Bytes())
+
+	// -s·G
+	sGy1 := new(big.Int).Sub(c.Params().P, sGy)
+
+	//t·P = R + (-s·G)
+	tPx, tPy := c.Add(Rx, Ry, sGx, sGy1)
+
+	//P = t·P / t
+	Px, Py := c.ScalarMult(tPx, tPy, invt.Bytes())
+
+	pb := PublicKey{
+		Curve: c,
+		X:     Px,
+		Y:     Py,
+	}
+	return pb.SerializeUncompressed(), nil
+
+}
+
+func decompressPoint(curve elliptic.Curve, x *big.Int, v int) (*big.Int, error) {
+	// TODO: This will probably only work for secp256k1 due to
+	// optimizations.
+
+	// Y = +-sqrt(x^3 +Ax + B) , B is 7
+	A, _ := new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFC", 16)
+	One := new(big.Int).SetInt64(1)
+	Four := new(big.Int).SetInt64(4)
+	x3 := new(big.Int).Mul(x, x)
+	x3.Mul(x3, x)
+	ax := new(big.Int).Mul(A, x)
+	x3.Add(x3, ax)
+	x3.Add(x3, curve.Params().B)
+	x3.Mod(x3, curve.Params().P)
+
+	// Now calculate sqrt mod p of x^3 + B
+	// This code used to do a full sqrt based on tonelli/shanks,
+	// but this was replaced by the algorithms referenced in
+	// https://bitcointalk.org/index.php?topic=162805.msg1712294#msg1712294
+	exp := new(big.Int).Add(curve.Params().P, One) //exp = Curve.p+1
+	exp.Div(exp, Four)                             // exp = (p+1)/4
+
+	//modify at 2020/02/04
+	y := new(big.Int).ModSqrt(x3, curve.Params().P) // x3^exp mod Curve.P
+
+	if y == nil {
+		return nil, errors.New(fmt.Sprintf("x3^exp mod Curve.P is error, x3=%s", hex.EncodeToString(x3.Bytes())))
+	}
+
+	// Check that y is a square root of x^3 + B.
+	ybit := (v%2 == 1)
+	if ybit != isOdd(y) {
+		y.Sub(curve.Params().P, y)
+	}
+
+	return y, nil
+}
+func isOdd(a *big.Int) bool {
+	return a.Bit(0) == 1
+}
+
+func intToByte(i *big.Int) []byte {
+	b1, b2 := [32]byte{}, i.Bytes()
+	copy(b1[32-len(b2):], b2)
+	return b1[:]
 }

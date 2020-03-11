@@ -16,19 +16,13 @@ limitations under the License.
 package sm2
 
 import (
-	"crypto/rand"
-	"crypto/x509/pkix"
-	"encoding/asn1"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"math/big"
-	"net"
-	"os"
 	"testing"
-	"time"
 )
 
+/*
 func TestSm2(t *testing.T) {
 	priv, err := GenerateKey() // 生成密钥对
 	if err != nil {
@@ -196,7 +190,40 @@ func TestSm2(t *testing.T) {
 		fmt.Printf("CheckSignature ok\n")
 	}
 }
+*/
+func TestRecoverPubKey(t *testing.T) {
+	priv, err := GenerateKey() // 生成密钥对
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("%v\n", priv.Curve.IsOnCurve(priv.X, priv.Y)) // 验证是否为sm2的曲线
+	pub := &priv.PublicKey
+	fmt.Printf("pub.X %v\n", pub.X)
+	fmt.Printf("pub.Y %v\n", pub.Y)
+	msg := []byte("123456")
+	uid := []byte("0")
+	sig, err1 := Sm2Sign(priv, msg, uid)
+	if err1 != nil {
+		fmt.Printf("failde err is %v\n", err1)
+	}
 
+	pubkey, err := RecoverPubKey(msg, sig)
+	if err == nil {
+		fmt.Println(pubkey)
+		//fmt.Printf("pubkey.X %v\n", pubkey.X)
+		//fmt.Printf("pubkey.Y %v\n", pubkey.Y)
+		//if pub.Y.Cmp(pubkey.Y) != 0 {
+		//	log.Fatalf("RecoverPubKey Y failed")
+		//}
+		//
+		//if pub.X.Cmp(pubkey.X) != 0 {
+		//	log.Fatalf("RecoverPubKey X failed")
+		//}
+	}
+
+}
+
+/*
 func BenchmarkSM2(t *testing.B) {
 	t.ReportAllocs()
 	msg := []byte("test")
@@ -217,4 +244,49 @@ func BenchmarkSM2(t *testing.B) {
 		// 	fmt.Printf("Verify ok\n")
 		// }
 	}
+}
+*/
+
+func TestSm2Sign(t *testing.T) {
+	x, _ := new(big.Int).SetString("33f24533ccfb46ea91f9f060008d4728f671b1e3092dbdf63cc4ce2e2ffe3915", 16)
+	y, _ := new(big.Int).SetString("b4a3baf837807c51c0197d866b9c0887f643bcd845dab36c95988df12b3a57ea", 16)
+	d, _ := new(big.Int).SetString("bfce850d58038cbe9b5bf4e3327a3c13bc85a948fb49c196b2067a07eab959cc", 16)
+	pub := PublicKey{
+		Curve: P256Sm2(),
+		X:     x,
+		Y:     y,
+	}
+	prv := PrivateKey{
+		PublicKey: pub,
+		D:         d,
+	}
+	msg := []byte("a")
+	uid := []byte("did:bid:23")
+
+	sign, err := Sm2Sign(&prv, msg, uid)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	//signature := Sm2Verify(&pub, msg, uid, new(big.Int).SetBytes(sign[:32]), new(big.Int).SetBytes(sign[32:64]))
+	//fmt.Println(signature)
+
+	fmt.Println(sign)
+
+	pubKey, _ := RecoverPubKey(msg, sign)
+	fmt.Println(pubKey)
+	fmt.Println(pub.SerializeUncompressed())
+}
+
+func TestCalValue(t *testing.T) {
+	p, _ := new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFF", 16)
+
+	x3, _ := new(big.Int).SetString("7a3ffc62032463f5335bb040fc76e965d721eec925fe1e21ab71884cfd3c6059", 16)
+	//x3, _ := new(big.Int).SetString("a1f6711ab4d4a2f1f013d71be84ed4f85f5859bb2e8733a1dfdf260fc5cabd5c", 16)
+
+	//y := new(big.Int).ModSqrt(x3, p)
+	y := new(big.Int).Sqrt(x3)
+	y.Mod(y, p)
+
+	fmt.Println(y)
 }
