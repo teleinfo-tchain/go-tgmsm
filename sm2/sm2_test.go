@@ -248,6 +248,24 @@ func BenchmarkSM2(t *testing.B) {
 */
 
 func TestSm2Sign(t *testing.T) {
+
+	total := 100
+	fail := 0
+
+	for i := 0; i < total; i++ {
+
+		flag := test()
+		if flag {
+			fmt.Println("===第", i, "次===============================成功")
+		} else {
+			fail++
+			fmt.Println("===第", i, "次===============================失败")
+		}
+	}
+	fmt.Println("失败了", fail, "次", "总共", total, "次")
+}
+func test() (flag bool) {
+	flag = true
 	x, _ := new(big.Int).SetString("33f24533ccfb46ea91f9f060008d4728f671b1e3092dbdf63cc4ce2e2ffe3915", 16)
 	y, _ := new(big.Int).SetString("b4a3baf837807c51c0197d866b9c0887f643bcd845dab36c95988df12b3a57ea", 16)
 	d, _ := new(big.Int).SetString("bfce850d58038cbe9b5bf4e3327a3c13bc85a948fb49c196b2067a07eab959cc", 16)
@@ -265,17 +283,22 @@ func TestSm2Sign(t *testing.T) {
 
 	sign, err := Sm2Sign(&prv, msg, uid)
 	if err != nil {
+		flag = false
 		fmt.Println(err)
 	}
 
-	//signature := Sm2Verify(&pub, msg, uid, new(big.Int).SetBytes(sign[:32]), new(big.Int).SetBytes(sign[32:64]))
-	//fmt.Println(signature)
+	signature := Sm2Verify(&pub, msg, uid, new(big.Int).SetBytes(sign[:32]), new(big.Int).SetBytes(sign[32:64]))
+	fmt.Println(signature)
 
 	fmt.Println(sign)
 
-	pubKey, _ := RecoverPubKey(msg, sign)
+	pubKey, _ := RecoverPubKey(msg, sign[:65])
 	fmt.Println(pubKey)
 	fmt.Println(pub.SerializeUncompressed())
+	if len(pubKey) == 0 {
+		flag = false
+	}
+	return
 }
 
 func TestCalValue(t *testing.T) {

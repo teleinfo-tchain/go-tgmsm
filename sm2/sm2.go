@@ -170,7 +170,7 @@ func kdf(x, y []byte, length int) ([]byte, bool) {
 	}
 	return c, false
 }
-
+/*
 func randFieldElement(c elliptic.Curve, rand io.Reader) (k *big.Int, err error) {
 	params := c.Params()
 	b := make([]byte, params.BitSize/8+8)
@@ -183,6 +183,21 @@ func randFieldElement(c elliptic.Curve, rand io.Reader) (k *big.Int, err error) 
 	k.Mod(k, n)
 	k.Add(k, one)
 	return
+}
+*/
+func randFieldElement(c elliptic.Curve, rnd io.Reader) (k *big.Int, err error) {
+	params := c.Params()
+	intOne := new(big.Int).SetInt64(1)
+	for {
+		k,err = rand.Int(rnd,params.N)
+		if err != nil {
+			return nil , err
+		}
+		if k.Cmp(intOne) >= 0 {
+			return k, err
+		}
+	}
+
 }
 
 func GenerateKey() (*PrivateKey, error) {
@@ -321,25 +336,31 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 	if err != nil {
 		return
 	}
+	fmt.Printf("sign e is %v\n",e)
 	c := priv.PublicKey.Curve
 	N := c.Params().N
 	if N.Sign() == 0 {
 		return
 	}
-	var ry, k *big.Int
-
+	var  ry, k *big.Int
+    
 	for { // 调整算法细节以实现SM2
 		for {
 			k, err = randFieldElement(c, rand.Reader)
+
 			if err != nil {
 				sig.R = nil
 				return
 			}
 			sig.R, ry = priv.Curve.ScalarBaseMult(k.Bytes())
+		//	rx = new(big.Int).SetBytes(sig.R.Bytes())
+		//	fmt.Printf("sign rx is %v\n",rx)
 			sig.R.Add(sig.R, e)
 			sig.R.Mod(sig.R, N)
+			
 			if sig.R.Sign() != 0 {
-				if t := new(big.Int).Add(sig.R, k); t.Cmp(N) != 0 {
+				intZero := new(big.Int).SetInt64(0)
+				if t := new(big.Int).Add(sig.R, k); t.Cmp(N) != 0 && t.Cmp(intZero) != 0{
 					break
 				}
 			}
@@ -356,7 +377,8 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 		d1Inv := new(big.Int).ModInverse(d1, N)
 		sig.S.Mul(sig.S, d1Inv)
 		sig.S.Mod(sig.S, N)
-		if sig.S.Sign() != 0 {
+		fmt.Printf("sign sig.s is %v\n",sig.S)
+		if sig.S.Sign() != 0  {
 			break
 		}
 	}
@@ -601,9 +623,20 @@ func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
 	s := new(big.Int).SetBytes(sig[32:64])
 	e, _ := msgHash(za, msg)
 	Rx := new(big.Int).Sub(r, e)
-	Ry, err := decompressPoint(c, Rx, int(sig[64]))
-
+//	fmt.Printf("RecoverPubKey Before mod Rx is %v\n",Rx)
+	for {	
+		if Rx.Sign() > 0 { //不可能出现rx + e - N > e 的情况，因为rx < N
+			break
+		} 
+		Rx.Mod(Rx,c.Params().N)
+	}
+	Ry, err := decompressPoint(c, Rx, int(sig[64])%2 == 1)
+//	fmt.Printf("RecoverPubKey e is %v\n",e)
+//	fmt.Printf("RecoverPubKey sig.r is %v\n",r)
+//	fmt.Printf("RecoverPubKey sig.s is %v\n",s)
+//	fmt.Printf("RecoverPubKey Rx is %v\n,Ry is %v\n",Rx, Ry)
 	if err != nil {
+		fmt.Println("decompressPoint Ry failed,err is ",err)
 		return []byte{}, err
 	}
 
@@ -630,43 +663,82 @@ func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
 
 }
 
-func decompressPoint(curve elliptic.Curve, x *big.Int, v int) (*big.Int, error) {
+//func decompressPoint(curve elliptic.Curve, x *big.Int, v int) (*big.Int, error) {
+//	// TODO: This will probably only work for secp256k1 due to
+//	// optimizations.
+//
+//	// Y = +-sqrt(x^3 +Ax + B) , B is 7
+//	A, _ := new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFC", 16)
+//	One := new(big.Int).SetInt64(1)
+//	Four := new(big.Int).SetInt64(4)
+//	x3 := new(big.Int).Mul(x, x)
+//	x3.Mul(x3, x)
+//	ax := new(big.Int).Mul(A, x)
+//	x3.Add(x3, ax)
+//	x3.Add(x3, curve.Params().B)
+//	x3.Mod(x3, curve.Params().P)
+//
+//	// Now calculate sqrt mod p of x^3 + B
+//	// This code used to do a full sqrt based on tonelli/shanks,
+//	// but this was replaced by the algorithms referenced in
+//	// https://bitcointalk.org/index.php?topic=162805.msg1712294#msg1712294
+//	exp := new(big.Int).Add(curve.Params().P, One) //exp = Curve.p+1
+//	exp.Div(exp, Four)                             // exp = (p+1)/4
+//
+//	//modify at 2020/02/04
+//	y := new(big.Int).ModSqrt(x3, curve.Params().P) // x3^exp mod Curve.P
+//
+//	if y == nil {
+//		return nil, errors.New(fmt.Sprintf("x3^exp mod Curve.P is error, x3=%s", hex.EncodeToString(x3.Bytes())))
+//	}
+//
+//	// Check that y is a square root of x^3 + B.
+//	ybit := (v%2 == 1)
+//	if ybit != isOdd(y) {
+//		y.Sub(curve.Params().P, y)
+//	}
+//
+//	return y, nil
+//}
+
+func decompressPoint(curve elliptic.Curve, x *big.Int, ybit bool) (*big.Int, error) {
 	// TODO: This will probably only work for secp256k1 due to
 	// optimizations.
 
-	// Y = +-sqrt(x^3 +Ax + B) , B is 7
-	A, _ := new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFC", 16)
-	One := new(big.Int).SetInt64(1)
-	Four := new(big.Int).SetInt64(4)
+	// Y = +-sqrt(x^3 + AX + B)
+	a, _ := new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFC", 16)
+	ax := new(big.Int).Mul(x, a)
 	x3 := new(big.Int).Mul(x, x)
 	x3.Mul(x3, x)
-	ax := new(big.Int).Mul(A, x)
 	x3.Add(x3, ax)
 	x3.Add(x3, curve.Params().B)
 	x3.Mod(x3, curve.Params().P)
 
-	// Now calculate sqrt mod p of x^3 + B
-	// This code used to do a full sqrt based on tonelli/shanks,
-	// but this was replaced by the algorithms referenced in
-	// https://bitcointalk.org/index.php?topic=162805.msg1712294#msg1712294
-	exp := new(big.Int).Add(curve.Params().P, One) //exp = Curve.p+1
-	exp.Div(exp, Four)                             // exp = (p+1)/4
-
-	//modify at 2020/02/04
-	y := new(big.Int).ModSqrt(x3, curve.Params().P) // x3^exp mod Curve.P
+	y := new(big.Int).ModSqrt(x3, curve.Params().P)
 
 	if y == nil {
 		return nil, errors.New(fmt.Sprintf("x3^exp mod Curve.P is error, x3=%s", hex.EncodeToString(x3.Bytes())))
 	}
 
-	// Check that y is a square root of x^3 + B.
-	ybit := (v%2 == 1)
 	if ybit != isOdd(y) {
 		y.Sub(curve.Params().P, y)
 	}
 
+	// Check that y is a square root of x^3 + B.
+	y2 := new(big.Int).Mul(y, y)
+	y2.Mod(y2, curve.Params().P)
+	if y2.Cmp(x3) != 0 {
+		return nil, fmt.Errorf("invalid square root")
+	}
+
+	// Verify that y-coord has expected parity.
+	if ybit != isOdd(y) {
+		return nil, fmt.Errorf("ybit doesn't match oddness")
+	}
+
 	return y, nil
 }
+
 func isOdd(a *big.Int) bool {
 	return a.Bit(0) == 1
 }

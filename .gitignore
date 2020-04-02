@@ -31,3 +31,5 @@ _ReSharper*/
 #Nuget packages folder
 packages/
 *.pem
+.DS_Store
+*/.DS_Store
