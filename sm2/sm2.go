@@ -32,7 +32,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/tjfoc/gmsm/sm3"
+	"github.com/teleinfo-bif/bit-gmsm/sm3"
 )
 
 var (
@@ -170,6 +170,7 @@ func kdf(x, y []byte, length int) ([]byte, bool) {
 	}
 	return c, false
 }
+
 /*
 func randFieldElement(c elliptic.Curve, rand io.Reader) (k *big.Int, err error) {
 	params := c.Params()
@@ -189,9 +190,9 @@ func randFieldElement(c elliptic.Curve, rnd io.Reader) (k *big.Int, err error) {
 	params := c.Params()
 	intOne := new(big.Int).SetInt64(1)
 	for {
-		k,err = rand.Int(rnd,params.N)
+		k, err = rand.Int(rnd, params.N)
 		if err != nil {
-			return nil , err
+			return nil, err
 		}
 		if k.Cmp(intOne) >= 0 {
 			return k, err
@@ -336,14 +337,14 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 	if err != nil {
 		return
 	}
-	fmt.Printf("sign e is %v\n",e)
+	fmt.Printf("sign e is %v\n", e)
 	c := priv.PublicKey.Curve
 	N := c.Params().N
 	if N.Sign() == 0 {
 		return
 	}
-	var  ry, k *big.Int
-    
+	var ry, k *big.Int
+
 	for { // 调整算法细节以实现SM2
 		for {
 			k, err = randFieldElement(c, rand.Reader)
@@ -353,14 +354,14 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 				return
 			}
 			sig.R, ry = priv.Curve.ScalarBaseMult(k.Bytes())
-		//	rx = new(big.Int).SetBytes(sig.R.Bytes())
-		//	fmt.Printf("sign rx is %v\n",rx)
+			//	rx = new(big.Int).SetBytes(sig.R.Bytes())
+			//	fmt.Printf("sign rx is %v\n",rx)
 			sig.R.Add(sig.R, e)
 			sig.R.Mod(sig.R, N)
-			
+
 			if sig.R.Sign() != 0 {
 				intZero := new(big.Int).SetInt64(0)
-				if t := new(big.Int).Add(sig.R, k); t.Cmp(N) != 0 && t.Cmp(intZero) != 0{
+				if t := new(big.Int).Add(sig.R, k); t.Cmp(N) != 0 && t.Cmp(intZero) != 0 {
 					break
 				}
 			}
@@ -377,8 +378,8 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 		d1Inv := new(big.Int).ModInverse(d1, N)
 		sig.S.Mul(sig.S, d1Inv)
 		sig.S.Mod(sig.S, N)
-		fmt.Printf("sign sig.s is %v\n",sig.S)
-		if sig.S.Sign() != 0  {
+		fmt.Printf("sign sig.s is %v\n", sig.S)
+		if sig.S.Sign() != 0 {
 			break
 		}
 	}
@@ -623,20 +624,20 @@ func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
 	s := new(big.Int).SetBytes(sig[32:64])
 	e, _ := msgHash(za, msg)
 	Rx := new(big.Int).Sub(r, e)
-//	fmt.Printf("RecoverPubKey Before mod Rx is %v\n",Rx)
-	for {	
+	//	fmt.Printf("RecoverPubKey Before mod Rx is %v\n",Rx)
+	for {
 		if Rx.Sign() > 0 { //不可能出现rx + e - N > e 的情况，因为rx < N
 			break
-		} 
-		Rx.Mod(Rx,c.Params().N)
+		}
+		Rx.Mod(Rx, c.Params().N)
 	}
 	Ry, err := decompressPoint(c, Rx, int(sig[64])%2 == 1)
-//	fmt.Printf("RecoverPubKey e is %v\n",e)
-//	fmt.Printf("RecoverPubKey sig.r is %v\n",r)
-//	fmt.Printf("RecoverPubKey sig.s is %v\n",s)
-//	fmt.Printf("RecoverPubKey Rx is %v\n,Ry is %v\n",Rx, Ry)
+	//	fmt.Printf("RecoverPubKey e is %v\n",e)
+	//	fmt.Printf("RecoverPubKey sig.r is %v\n",r)
+	//	fmt.Printf("RecoverPubKey sig.s is %v\n",s)
+	//	fmt.Printf("RecoverPubKey Rx is %v\n,Ry is %v\n",Rx, Ry)
 	if err != nil {
-		fmt.Println("decompressPoint Ry failed,err is ",err)
+		fmt.Println("decompressPoint Ry failed,err is ", err)
 		return []byte{}, err
 	}
 
