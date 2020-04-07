@@ -385,7 +385,15 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 	}
 
 	sign = make([]byte, 66)
-	copy(sign[:32], sig.R.Bytes())
+
+	rlen := len(sig.R.Bytes())
+
+	start := 0
+	if rlen < 32 {
+		start = 32 - rlen
+	}
+
+	copy(sign[start:32], sig.R.Bytes())
 	copy(sign[32:64], sig.S.Bytes())
 	if sig.V == 0 {
 		sign[64] = 0
