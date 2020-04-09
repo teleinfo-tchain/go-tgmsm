@@ -633,6 +633,15 @@ func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
 	za, _ := ZA(nil, nil)
 	c := P256Sm2()
 	//fmt.Printf("RecoverPubKey sig is %v\n", sig)
+
+	if bytes.Count(sig[:32], []byte{0}) == 32 {
+		return nil, errors.New("r of sig of RecoverPubKey is nil")
+	}
+
+	if bytes.Count(sig[32:64], []byte{0}) == 32 {
+		return nil, errors.New("s of sig of RecoverPubKey is nil")
+	}
+
 	r := new(big.Int).SetBytes(sig[:32])
 	s := new(big.Int).SetBytes(sig[32:64])
 	//fmt.Printf("RecoverPubKey sig.R is %v\n", r)
