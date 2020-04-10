@@ -324,21 +324,25 @@ func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
 	return x.Cmp(r) == 0
 }
 
-func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
+func Sm2Sign(priv *PrivateKey, msg, uid []byte) ([]byte, error) {
+	var (
+		sign []byte
+		err  error
+	)
 	var sig Sm2Signature
 	za, err := ZA(nil, nil)
 	if err != nil {
-		return
+		return sign, err
 	}
 	e, err := msgHash(za, msg)
 	if err != nil {
-		return
+		return sign, err
 	}
 	//fmt.Printf("sign e is %v\n", e)
 	c := priv.PublicKey.Curve
 	N := c.Params().N
 	if N.Sign() == 0 {
-		return
+		return sign, err
 	}
 	var ry, k *big.Int
 
@@ -348,7 +352,7 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 
 			if err != nil {
 				sig.R = nil
-				return
+				return sign, err
 			}
 			sig.R, ry = priv.Curve.ScalarBaseMult(k.Bytes())
 			//rx := new(big.Int).SetBytes(sig.R.Bytes())
@@ -406,7 +410,14 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) (sign []byte, err error) {
 	//fmt.Printf("test sign sig.S is %v\n", s)
 	//fmt.Printf("test sign sig.R is %v\n", R)
 
-	return
+	recoverPubKey, err := RecoverPubKey(msg, sign[:65])
+	x := new(big.Int).SetBytes(recoverPubKey[1:33])
+	y := new(big.Int).SetBytes(recoverPubKey[33:65])
+	if err == nil && priv.PublicKey.X.Cmp(x) == 0 && priv.PublicKey.Y.Cmp(y) == 0 {
+		return sign, err
+	} else {
+		return Sm2Sign(priv, msg, uid)
+	}
 }
 
 func Sm2Verify(pub *PublicKey, msg, uid []byte, r, s *big.Int) bool {
