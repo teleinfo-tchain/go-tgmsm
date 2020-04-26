@@ -636,6 +636,7 @@ s = (k-r*d)/(1+d) //k是随机数，d是私钥
 */
 
 func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
+	initP256Sm2()
 	if len(msg) > 32 {
 		return []byte{}, nil
 	}
