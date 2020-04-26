@@ -1056,7 +1056,11 @@ func sm2P256ToBig(X *sm2P256FieldElement) *big.Int {
 		rInverse, _ = new(big.Int).SetString("7ffffffd80000002fffffffe000000017ffffffe800000037ffffffc80000002", 16)
 	}
 
+	rP := sm2P256.P
+	if rP == nil {
+		rP, _ = new(big.Int).SetString("FFFFFFFEFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF00000000FFFFFFFFFFFFFFFF", 16)
+	}
 	r.Mul(r, rInverse)
-	r.Mod(r, sm2P256.P)
+	r.Mod(r, rP)
 	return r
 }
