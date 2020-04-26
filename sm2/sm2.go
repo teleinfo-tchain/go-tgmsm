@@ -325,6 +325,7 @@ func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
 }
 
 func Sm2Sign(priv *PrivateKey, msg, uid []byte) ([]byte, error) {
+	initP256Sm2()
 	var (
 		sign []byte
 		err  error
