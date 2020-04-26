@@ -1039,6 +1039,9 @@ func sm2P256FromBig(X *sm2P256FieldElement, a *big.Int) {
 // X = r * R mod P
 // r = X * R' mod P
 func sm2P256ToBig(X *sm2P256FieldElement) *big.Int {
+	if sm2P256.RInverse == nil {
+		initP256Sm2()
+	}
 	r, tm := new(big.Int), new(big.Int)
 	r.SetInt64(int64(X[8]))
 	for i := 7; i >= 0; i-- {

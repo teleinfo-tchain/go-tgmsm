@@ -325,7 +325,6 @@ func Verify(pub *PublicKey, hash []byte, r, s *big.Int) bool {
 }
 
 func Sm2Sign(priv *PrivateKey, msg, uid []byte) ([]byte, error) {
-	initP256Sm2()
 	var (
 		sign []byte
 		err  error
@@ -636,7 +635,6 @@ s = (k-r*d)/(1+d) //k是随机数，d是私钥
 */
 
 func RecoverPubKey(msg []byte, sig []byte) ([]byte, error) {
-	initP256Sm2()
 	if len(msg) > 32 {
 		return []byte{}, nil
 	}
