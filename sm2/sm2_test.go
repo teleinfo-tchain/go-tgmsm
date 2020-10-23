@@ -16,6 +16,8 @@ limitations under the License.
 package sm2
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"math/big"
@@ -266,9 +268,25 @@ func TestSm2Sign(t *testing.T) {
 }
 func test() (flag bool) {
 	flag = true
-	x, _ := new(big.Int).SetString("33f24533ccfb46ea91f9f060008d4728f671b1e3092dbdf63cc4ce2e2ffe3915", 16)
-	y, _ := new(big.Int).SetString("b4a3baf837807c51c0197d866b9c0887f643bcd845dab36c95988df12b3a57ea", 16)
-	d, _ := new(big.Int).SetString("bfce850d58038cbe9b5bf4e3327a3c13bc85a948fb49c196b2067a07eab959cc", 16)
+	//x, _ := new(big.Int).SetString("33f24533ccfb46ea91f9f060008d4728f671b1e3092dbdf63cc4ce2e2ffe3915", 16)
+	//y, _ := new(big.Int).SetString("b4a3baf837807c51c0197d866b9c0887f643bcd845dab36c95988df12b3a57ea", 16)
+	//d, _ := new(big.Int).SetString("bfce850d58038cbe9b5bf4e3327a3c13bc85a948fb49c196b2067a07eab959cc", 16)
+
+	//x, _ := new(big.Int).SetString("87029e148d31cc49ff6a95316c32ab2b1312e361239296661d9156bea560110a", 16)
+	//y, _ := new(big.Int).SetString("b9c0fda4d00733507742575a670f5bfa9c6baeaca2037696141cf39fd4a4192", 16)
+	//d, _ := new(big.Int).SetString("112393630900846926471192965881774283959259921930569784013236943944151771808341", 10)
+
+	//x, _ := new(big.Int).SetString("11969f62eb5b618acda39f16575c98f02f04c8aa99fa4f1aa714cb6ee4ea3a9c", 16)
+	//y, _ := new(big.Int).SetString("86294a908440cce539e69fe402dfd42062f7d3713ea35389572651af37ce5c78", 16)
+	x, _ := new(big.Int).SetString("58101c2c82dce8db7a90b1d5506a0decde46e0558cce64dcb2205d9b03ca3108", 16)
+	y, _ := new(big.Int).SetString("5aebc775000a1f533cee10bd282e4f500c2556cb2af26d425757e8968065a6e2", 16)
+
+	d, _ := new(big.Int).SetString("eea9354b98fd51d7b962cb4c7e61d691e4d540951e1cf277dd72f2a37544c1da", 16)
+
+	key, _ := GenerateKeyBySeed(d.Bytes(), false)
+	fmt.Println(hex.EncodeToString(key.X.Bytes()))
+	fmt.Println(hex.EncodeToString(key.Y.Bytes()))
+
 	pub := PublicKey{
 		Curve: P256Sm2(),
 		X:     x,
@@ -278,8 +296,9 @@ func test() (flag bool) {
 		PublicKey: pub,
 		D:         d,
 	}
-	msg := []byte("a")
-	uid := []byte("did:bid:23")
+	//msg := []byte("a")
+	msg := []byte("abcdefg")
+	uid := []byte("")
 
 	sign, err := Sm2Sign(&prv, msg, uid)
 	if err != nil {
@@ -287,17 +306,31 @@ func test() (flag bool) {
 		fmt.Println(err)
 	}
 
-	signature := Sm2Verify(&pub, msg, uid, new(big.Int).SetBytes(sign[:32]), new(big.Int).SetBytes(sign[32:64]))
-	fmt.Println(signature)
+	_ = prv
+	//sign, _ := hex.DecodeString("72f5d313a0c4bf32e0e5d715e7fb731d0a914c8505fa0abab9b20df4a58889cf9d97711ca2f1ba06464b6875626fb3678ae8c5d48534bd84adc6056e15bb881c01")
+	//sign, _ := hex.DecodeString("75a6508116b7ab0e056dcb844904872bb2c6d6fd4f3e3b72dee358a485a894e25acd951decc5fc075213ed3943e1d0049dc66fb41d1b002cb2708b9ad98d42eb00")
+	//sign, _ := hex.DecodeString("3e702736165d9f472cb0d3ae9bb05ecdeef478b7ff12b971ed321e2332cc8299383e6a4415f9424421281d238142a08c80715058fdbf54b9bf39da43d7f62add00")
 
-	fmt.Println(sign)
+	flag = Sm2Verify(&pub, msg, uid, new(big.Int).SetBytes(sign[:32]), new(big.Int).SetBytes(sign[32:64]))
+	fmt.Println(flag)
+	//if !flag {
+	//	return
+	//}
+	//
+	//fmt.Println(len(sign))
+	//fmt.Println(sign)
+	//fmt.Println(hex.EncodeToString(sign))
 
 	pubKey, _ := RecoverPubKey(msg, sign[:65])
 	fmt.Println(pubKey)
-	fmt.Println(pub.SerializeUncompressed())
+	pubK := pub.SerializeUncompressed()
+	fmt.Println(pubK)
 	if len(pubKey) == 0 {
 		flag = false
+		return
 	}
+
+	flag = bytes.Equal(pubKey, pubK)
 	return
 }
 

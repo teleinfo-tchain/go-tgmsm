@@ -402,22 +402,25 @@ func Sm2Sign(priv *PrivateKey, msg, uid []byte) ([]byte, error) {
 		sign[64] = 1
 	}
 	sign[65] = 0
-	//fmt.Printf("sign sig is %v\n", sign)
-	//R := new(big.Int).SetBytes(sign[start:32])
-	//r := new(big.Int).SetBytes(sign[:32])
-	//s := new(big.Int).SetBytes(sign[32:64])
-	//fmt.Printf("test sign sig.R is %v\n", r)
-	//fmt.Printf("test sign sig.S is %v\n", s)
-	//fmt.Printf("test sign sig.R is %v\n", R)
 
-	recoverPubKey, err := RecoverPubKey(msg, sign[:65])
-	x := new(big.Int).SetBytes(recoverPubKey[1:33])
-	y := new(big.Int).SetBytes(recoverPubKey[33:65])
-	if err == nil && priv.PublicKey.X.Cmp(x) == 0 && priv.PublicKey.Y.Cmp(y) == 0 {
-		return sign, err
-	} else {
-		return Sm2Sign(priv, msg, uid)
-	}
+	return sign, err
+
+	////fmt.Printf("sign sig is %v\n", sign)
+	////R := new(big.Int).SetBytes(sign[start:32])
+	////r := new(big.Int).SetBytes(sign[:32])
+	////s := new(big.Int).SetBytes(sign[32:64])
+	////fmt.Printf("test sign sig.R is %v\n", r)
+	////fmt.Printf("test sign sig.S is %v\n", s)
+	////fmt.Printf("test sign sig.R is %v\n", R)
+	//
+	//recoverPubKey, err := RecoverPubKey(msg, sign[:65])
+	//x := new(big.Int).SetBytes(recoverPubKey[1:33])
+	//y := new(big.Int).SetBytes(recoverPubKey[33:65])
+	//if err == nil && priv.PublicKey.X.Cmp(x) == 0 && priv.PublicKey.Y.Cmp(y) == 0 {
+	//	return sign, err
+	//} else {
+	//	return Sm2Sign(priv, msg, uid)
+	//}
 }
 
 func Sm2Verify(pub *PublicKey, msg, uid []byte, r, s *big.Int) bool {
