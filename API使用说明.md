@@ -3,7 +3,7 @@
 ## 国密gmsm包安装
 
 ```bash
-go get -u github.com/teleinfo-bif/bit-gmsm
+go get -u github.com/tchain/go-tgmsm
 ```
 
 ## SM3密码杂凑算法 - SM3 cryptographic hash algorithm
@@ -12,7 +12,7 @@ go get -u github.com/teleinfo-bif/bit-gmsm
 
 导入包
 ```Go
-import github.com/teleinfo-bif/bit-gmsm/sm3
+import github.com/tchain/go-tgmsm/sm3
 ```
 
 ### 代码示例
@@ -44,14 +44,14 @@ func Sum() []byte
 
 导入包
 ```Go
-import github.com/teleinfo-bif/bit-gmsm/sm4
+import github.com/tchain/go-tgmsm/sm4
 ```
 
 ### 代码示例
 
 ```Go
     import  "crypto/cipher"
-    import  "github.com/teleinfo-bif/bit-gmsm/sm4"
+    import  "github.com/tchain/go-tgmsm/sm4"
 
     func main(){
         // 128比特密钥
@@ -118,7 +118,7 @@ func NewCipher(key []byte) (cipher.Block, error)
 
 导入包
 ```Go
-import github.com/teleinfo-bif/bit-gmsm/sm2
+import github.com/tchain/go-tgmsm/sm2
 ```
 
 ### 代码示例

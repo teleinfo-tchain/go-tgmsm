@@ -32,7 +32,7 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/teleinfo-bif/bit-gmsm/sm3"
+	"github.com/tchain/go-tgmsm/sm3"
 )
 
 var (
