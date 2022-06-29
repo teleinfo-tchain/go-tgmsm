@@ -32,7 +32,7 @@ import (
 )
 
 func TestX509(t *testing.T) {
-	priv, err := sm2.GenerateKey(nil) // 生成密钥对
+	priv, err := sm2.GenerateKey() // 生成密钥对
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestX509(t *testing.T) {
 }
 
 func TestCreateRevocationList(t *testing.T) {
-	priv, err := sm2.GenerateKey(nil) // 生成密钥对
+	priv, err := sm2.GenerateKey() // 生成密钥对
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,7 @@ import (
 )
 
 func TestPKCS7SM2(t *testing.T) {
-	priv, err := sm2.GenerateKey(nil) // 生成密钥对
+	priv, err := sm2.GenerateKey() // 生成密钥对
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestPKCS7SM2(t *testing.T) {
 	}
 
 	content := []byte("this is test")
-	data, err := PKCS7EncryptSM2(content, []*Certificate{cert}, sm2.C1C3C2)
+	data, err := PKCS7EncryptSM2(content, []*Certificate{cert})
 	if err != nil {
 		t.Fatal("failed to PKCS7Encrypt ")
 	}
@@ -144,7 +144,7 @@ func TestPKCS7SM2(t *testing.T) {
 	if err != nil {
 		t.Fatal("failed to ParsePKCS7 ")
 	}
-	decryptData, err := pk7Data.DecryptSM2(cert, priv, sm2.C1C3C2)
+	decryptData, err := pk7Data.DecryptSM2(cert, priv)
 	if err != nil {
 		t.Fatal("failed to PKCS7Decrypt ")
 	}
