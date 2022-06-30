@@ -161,6 +161,9 @@ func ParseSm2PublicKey(der []byte) (*PublicKey, error) {
 	}
 	curve := P256Sm2()
 	x, y := elliptic.Unmarshal(curve, pubkey.BitString.Bytes)
+	if x == nil || y == nil {
+		return nil, errors.New("x509: not sm2 elliptic curve coordinates")
+	}
 	pub := PublicKey{
 		Curve: curve,
 		X:     x,
